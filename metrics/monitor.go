@@ -5,6 +5,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"net/http"
 	"strconv"
 	"sync"
 	"time"
@@ -303,6 +304,9 @@ func (m *Monitor) monitorInterceptor(ctx *gin.Context) {
 		if r := recover(); r != nil {
 			// 这里可以记录日志或者做异常监控
 			fmt.Println("Recovered from panic:", r)
+			// 如果发生 panic，直接返回 500 错误
+			ctx.AbortWithStatus(http.StatusInternalServerError)
+			return
 		}
 		// 即使发生 panic，仍然执行监控处理
 		m.ginMetricHandle(ctx, start)
@@ -321,6 +325,11 @@ func (m *Monitor) isExcludePath(path string) bool {
 }
 
 func (m *Monitor) ginMetricHandle(ctx *gin.Context, start time.Time) {
+	// 如果请求已经被中止（例如由于 panic），则不再处理指标
+	if ctx.IsAborted() {
+		return
+	}
+
 	r := ctx.Request
 	w := ctx.Writer
 
@@ -328,67 +337,82 @@ func (m *Monitor) ginMetricHandle(ctx *gin.Context, start time.Time) {
 	metric, err := m.GetMetrics(metricRequestTotal)
 	if err != nil {
 		fmt.Printf("GetMetrics failed: %v\n", err)
+	} else {
+		metric.Inc(m.getMetricValues(nil))
 	}
-	metric.Inc(m.getMetricValues(nil))
+
 	// 2.请求uv
 	metric, err = m.GetMetrics(metricRequestUVTotal)
 	if err != nil {
 		fmt.Printf("GetMetrics failed: %v\n", err)
-	}
-	if clientIP := ctx.ClientIP(); !bloomFilter.Contains(clientIP) {
+	} else if clientIP := ctx.ClientIP(); !bloomFilter.Contains(clientIP) {
 		bloomFilter.Add(clientIP)
 		_ = metric.Inc(m.getMetricValues(nil))
 	}
+
 	// 3.请求uri数量
 	metric, err = m.GetMetrics(metricURIRequestTotal)
 	if err != nil {
 		fmt.Printf("GetMetrics failed: %v\n", err)
-	}
-	err = metric.Inc(m.getMetricValues([]string{ctx.FullPath(), r.Method, strconv.Itoa(w.Status())}))
-	if err != nil {
-		fmt.Printf("Inc failed: %v\n", err)
-	}
-	// 4.请求body大小
-	if r.ContentLength > 0 {
-		metric, err = m.GetMetrics(metricRequestBody)
-		if err != nil {
-			fmt.Printf("GetMetrics failed: %v\n", err)
-		}
-		err = metric.Add(m.getMetricValues([]string{ctx.FullPath(), r.Method, strconv.Itoa(w.Status())}), float64(r.ContentLength))
-		if err != nil {
-			fmt.Printf("Add failed: %v\n", err)
-		}
-	}
-	// 5.响应body大小
-	if w.Size() > 0 {
-		metric, err = m.GetMetrics(metricResponseBody)
-		if err != nil {
-			fmt.Printf("GetMetrics failed: %v\n", err)
-		}
-		err = metric.Add(m.getMetricValues([]string{ctx.FullPath(), r.Method, strconv.Itoa(w.Status())}), float64(w.Size()))
-		if err != nil {
-			fmt.Printf("Add failed: %v\n", err)
-		}
-	}
-	// 6.请求持续时间
-	metric, err = m.GetMetrics(metricRequestDuration)
-	if err != nil {
-		fmt.Printf("GetMetrics failed: %v\n", err)
-	}
-	elapsed := time.Since(start).Seconds()
-	err = metric.Observe(m.getMetricValues([]string{ctx.FullPath(), r.Method, strconv.Itoa(w.Status())}), elapsed)
-	// 7.慢请求
-	if elapsed > float64(m.slowTime) {
-		metric, err = m.GetMetrics(metricSlowRequest)
-		if err != nil {
-			fmt.Printf("GetMetrics failed: %v\n", err)
-		}
+	} else {
 		err = metric.Inc(m.getMetricValues([]string{ctx.FullPath(), r.Method, strconv.Itoa(w.Status())}))
 		if err != nil {
 			fmt.Printf("Inc failed: %v\n", err)
 		}
 	}
+
+	// 4.请求body大小
+	if r.ContentLength > 0 {
+		metric, err = m.GetMetrics(metricRequestBody)
+		if err != nil {
+			fmt.Printf("GetMetrics failed: %v\n", err)
+		} else {
+			err = metric.Add(m.getMetricValues([]string{ctx.FullPath(), r.Method, strconv.Itoa(w.Status())}), float64(r.ContentLength))
+			if err != nil {
+				fmt.Printf("Add failed: %v\n", err)
+			}
+		}
+	}
+
+	// 5.响应body大小
+	if w.Size() > 0 {
+		metric, err = m.GetMetrics(metricResponseBody)
+		if err != nil {
+			fmt.Printf("GetMetrics failed: %v\n", err)
+		} else {
+			err = metric.Add(m.getMetricValues(nil), float64(w.Size()))
+			if err != nil {
+				fmt.Printf("Add failed: %v\n", err)
+			}
+		}
+	}
+	elapsed := time.Since(start).Seconds()
+	// 6.请求持续时间
+	metric, err = m.GetMetrics(metricRequestDuration)
+	if err != nil {
+		fmt.Printf("GetMetrics failed: %v\n", err)
+	} else {
+
+		err = metric.Observe(m.getMetricValues([]string{ctx.FullPath()}), elapsed)
+		if err != nil {
+			fmt.Printf("Observe failed: %v\n", err)
+		}
+	}
+
+	// 7.慢请求
+	if elapsed > float64(m.slowTime) {
+		metric, err = m.GetMetrics(metricSlowRequest)
+		if err != nil {
+			fmt.Printf("GetMetrics failed: %v\n", err)
+		} else {
+			err = metric.Inc(m.getMetricValues([]string{ctx.FullPath()}))
+			if err != nil {
+				fmt.Printf("Inc failed: %v\n", err)
+			}
+		}
+	}
 }
+
 func (m *Monitor) getMetricValues(metric_values []string) []string {
 	haveMetadata := m.includesMetadata()
 	if haveMetadata {
