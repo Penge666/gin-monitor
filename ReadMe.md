@@ -43,6 +43,14 @@ http://localhost:3000/
 
 这样，就可以通过granafa导入数据进行展示了
 
+![image-20250321222113675](ReadMe/image-20250321222113675.png)
+
+> **Bug**
+
+Note：如果出现下面的PV的情况，可以尝试入如下的方式·
+
+![image-20250321222156834](ReadMe/image-20250321222156834.png)
+
 ![image-20250321095113041](ReadMe/image-20250321095113041.png)
 
 同时也可以通过prometheus：http://localhost:9090/ 对其进行访问
