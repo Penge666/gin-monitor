@@ -11,6 +11,7 @@ func main() {
 	m := metrics.GetNewMonitor()
 	// 设置监控路径
 	m.SetMetricPath("/metrics")
+	m.SetExcludePath([]string{"/metrics"})
 	// 设置慢查询时间
 	m.SetSlowTime(10)
 	// 设置请求持续时间的统计阈值
