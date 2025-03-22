@@ -120,7 +120,7 @@ func (m *Monitor) GetMetrics(name string) (*Metric, error) {
 	return metric, nil
 }
 
-func (m *Monitor) Use(r gin.IRoutes) {
+func (m *Monitor) Attach(r gin.IRoutes) {
 	// 开始拦截
 	m.initGinMetrics()
 	r.Use(m.monitorInterceptor)
@@ -306,7 +306,7 @@ func (m *Monitor) monitorInterceptor(ctx *gin.Context) {
 			fmt.Println("Recovered from panic:", r)
 			// 如果发生 panic，直接返回 500 错误
 			ctx.AbortWithStatus(http.StatusInternalServerError)
-			return
+			//return
 		}
 		// 即使发生 panic，仍然执行监控处理
 		m.ginMetricHandle(ctx, start)
@@ -411,6 +411,7 @@ func (m *Monitor) ginMetricHandle(ctx *gin.Context, start time.Time) {
 			}
 		}
 	}
+
 }
 
 func (m *Monitor) getMetricValues(metric_values []string) []string {

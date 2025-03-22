@@ -1,6 +1,9 @@
 package metrics
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
 
 func TestBloomFilter(t *testing.T) {
 	// 初始化布隆过滤器
@@ -34,4 +37,17 @@ func TestBloomFilter(t *testing.T) {
 	if !bf.Contains("192.168.0.1") {
 		t.Error("Expected BloomFilter to return false for have ip.")
 	}
+}
+func TestPanic(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("Recovered from panic:", r)
+			//ctx.AbortWithStatus(http.StatusInternalServerError)
+			//return
+		}
+		fmt.Println("hhh")
+	}()
+
+	// 这里触发 panic
+	panic("something went wrong!")
 }
