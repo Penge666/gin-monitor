@@ -115,3 +115,8 @@ Note：如果出现下面的PV的情况，可以尝试入如下的方式·
 同时也可以通过prometheus：http://localhost:9090/ 对其进行访问
 
 ![image-20250321100626295](ReadMe/image-20250321100626295.png)
+
+# TODO
+
+- 可以将prometheus和ELK联动
+- 

@@ -82,7 +82,7 @@ func (m *Metric) Add(labelValues []string, value float64) error {
 	}
 	switch m.Type {
 	case COUNTER:
-		m.vec.(*prometheus.CounterVec).WithLabelValues(labelValues...).Add(value)
+		m.vec.(*prometheus.CounterVec).WithLabelValues(labelValues...).Add(value) // 底层已经实现了原子操作了
 		break
 	case GAUGE:
 		m.vec.(*prometheus.GaugeVec).WithLabelValues(labelValues...).Add(value)
